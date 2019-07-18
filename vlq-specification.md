@@ -74,7 +74,7 @@ To decode:
 Examples
 --------
 
-### Example: Encoding the value 2000000 to a RVLQ
+### Example: Encoding the 32-bit value 2000000 to a RVLQ
 
 Get the binary representation:
 
@@ -99,7 +99,7 @@ Store in big endian order:
     [fa 89 00]
 
 
-### Example: Encoding the value 0x19400000 to a LVLQ
+### Example: Encoding the 32-bit value 0x19400000 to a LVLQ
 
 Get the binary representation:
 
@@ -121,7 +121,7 @@ Add a continuation bit to all but the highest group:
 
 Store in little endian order:
 
-    [d0 c0]
+    [d0 0c]
 
 
 ### Example: Decoding a RVLQ from the sequence `[05 0f 4a e4 aa]`
@@ -169,8 +169,8 @@ Byte 2 (0x5a) has its high bit cleared, so the bytes following it (`[91 ff]`) ar
     1011010 ++ 1010010 ++ 0110100
     = 101101010100100110100
     = 10110101 01001001 10100 (000)
-    =     0xa5     0x49      0xb0
-    = 0xa549b000 (as a 32-bit value)
+    =     0xb5     0x49      0xa0
+    = 0xb549a000 (as a 32-bit value)
 
 
 
