@@ -40,6 +40,20 @@
 // Decode returns the number of bytes decoded, or 0 if the end was not found.
 //
 #define DEFINE_VLQ_ENCODE_DECODE_FUNCTIONS(SIZE, TYPE) \
+static int lvlq_encoded_size_ ## SIZE(TYPE value) \
+{ \
+    if(value == 0) \
+    { \
+        return 1; \
+    } \
+    int size = 0; \
+    while(value > 0) \
+    { \
+        value <<= 7; \
+        size++; \
+    } \
+    return size; \
+} \
 static int lvlq_encode_ ## SIZE(TYPE value, uint8_t* buffer, int buffer_length) \
 { \
     uint8_t const* end = buffer + buffer_length; \
@@ -71,12 +85,8 @@ static int lvlq_encode_ ## SIZE(TYPE value, uint8_t* buffer, int buffer_length) 
     } \
     else \
     { \
-        while(group_index < group_count) \
+        while((value & 0x7f) == 0) \
         { \
-            if((value & 0x7f) != 0) \
-            { \
-                break; \
-            } \
             group_index++; \
             value >>= 7; \
         } \
@@ -126,6 +136,20 @@ static int lvlq_decode_ ## SIZE(TYPE* value, const uint8_t* buffer, int buffer_l
     *value = accumulator; \
     return ptr - buffer; \
 } \
+static int rvlq_encoded_size_ ## SIZE(TYPE value) \
+{ \
+    if(value <= 0x7f) \
+    { \
+        return 1; \
+    } \
+    int size = 0; \
+    while(value > 0) \
+    { \
+        value >>= 7; \
+        size++; \
+    } \
+    return size; \
+} \
 static int rvlq_encode_ ## SIZE(TYPE value, uint8_t* buffer, int buffer_length) \
 { \
     uint8_t const* end = buffer + buffer_length; \
@@ -158,12 +182,8 @@ static int rvlq_encode_ ## SIZE(TYPE value, uint8_t* buffer, int buffer_length) 
     } \
     else \
     { \
-        while(group_index < group_count) \
+        while((value & group_mask) == 0) \
         { \
-            if((value & group_mask) != 0) \
-            { \
-                break; \
-            } \
             group_index++; \
             value <<= 7; \
         } \
