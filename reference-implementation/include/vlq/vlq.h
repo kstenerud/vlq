@@ -19,6 +19,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 #ifndef KS_VLQ_H
+#define KS_VLQ_H
 
 #include <stdint.h>
 #include <stdbool.h>
