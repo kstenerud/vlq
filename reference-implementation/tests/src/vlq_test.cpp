@@ -26,6 +26,16 @@ TEST(VLQ, NAME) \
     EXPECT_EQ(expected_value, actual_value); \
 }
 
+#define DEFINE_TEST_LVLQ_DECODE_INITIAL(NAME, SIZE, INITIAL_VALUE, EXPECTED_VALUE, ...) \
+TEST(VLQ, NAME) \
+{ \
+    uint ## SIZE ## _t expected_value = EXPECTED_VALUE; \
+    std::vector<uint8_t> encoded = __VA_ARGS__; \
+    uint ## SIZE ## _t actual_value = INITIAL_VALUE; \
+    lvlq_decode_ ## SIZE(&actual_value, encoded.data(), encoded.size()); \
+    EXPECT_EQ(expected_value, actual_value); \
+}
+
 #define DEFINE_TEST_RVLQ(NAME, SIZE, VALUE, ...) \
 TEST(VLQ, NAME) \
 { \
@@ -50,6 +60,17 @@ TEST(VLQ, NAME) \
     EXPECT_EQ(expected_value, actual_value); \
 }
 
+#define DEFINE_TEST_RVLQ_DECODE_INITIAL(NAME, SIZE, INITIAL_VALUE, EXPECTED_VALUE, ...) \
+TEST(VLQ, NAME) \
+{ \
+    uint ## SIZE ## _t expected_value = EXPECTED_VALUE; \
+    std::vector<uint8_t> encoded = __VA_ARGS__; \
+    uint ## SIZE ## _t actual_value = INITIAL_VALUE; \
+    rvlq_decode_ ## SIZE(&actual_value, encoded.data(), encoded.size()); \
+    EXPECT_EQ(expected_value, actual_value); \
+}
+
+
 DEFINE_TEST_LVLQ(left_64_0, 64, 0, {0x00})
 DEFINE_TEST_LVLQ(left_64_1, 64, 1, {0xc0, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x00})
 DEFINE_TEST_LVLQ(left_64_2, 64, 2, {0x81, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x00})
@@ -58,6 +79,8 @@ DEFINE_TEST_LVLQ(left_64_4000000000000000, 64, 0x4000000000000000ULL, {0x20})
 DEFINE_TEST_LVLQ(left_64_2000000000000000, 64, 0x2000000000000000ULL, {0x10})
 DEFINE_TEST_LVLQ(left_64_1000000000000000, 64, 0x1000000000000000ULL, {0x08})
 DEFINE_TEST_LVLQ(left_64_1234567812345678, 64, 0x1234567812345678ULL, {0xbc, 0xd6, 0xe8, 0xc8, 0xc0, 0xe7, 0x8a, 0x8d, 0x09})
+DEFINE_TEST_LVLQ_DECODE_INITIAL(left_continuation_32, 32, 0x80, 0x02000001, {0x01})
+DEFINE_TEST_LVLQ_DECODE_INITIAL(left_continuation_64, 64, 0x80, 0x0200000000000001ULL, {0x01})
 
 DEFINE_TEST_RVLQ(right_64_0, 64, 0, {0x00})
 DEFINE_TEST_RVLQ(right_64_1, 64, 1, {0x01})
@@ -67,6 +90,8 @@ DEFINE_TEST_RVLQ(right_64_4000000000000000, 64, 0x4000000000000000ULL, {0xc0, 0x
 DEFINE_TEST_RVLQ(right_64_2000000000000000, 64, 0x2000000000000000ULL, {0xa0, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x00})
 DEFINE_TEST_RVLQ(right_64_1000000000000000, 64, 0x1000000000000000ULL, {0x90, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x00})
 DEFINE_TEST_RVLQ(right_64_1234567812345678, 64, 0x1234567812345678ULL, {0x92, 0x9a, 0x95, 0xcf, 0x81, 0x91, 0xd1, 0xac, 0x78})
+DEFINE_TEST_RVLQ_DECODE_INITIAL(right_continuation_32, 32, 0x01, 0x81, {0x01})
+DEFINE_TEST_RVLQ_DECODE_INITIAL(right_continuation_64, 64, 0x01, 0x81, {0x01})
 
 DEFINE_TEST_RVLQ(example_rvlq_2000000, 32, 2000000, {0xfa, 0x89, 0x00})
 DEFINE_TEST_LVLQ(example_lvlq_19400000, 32, 0x19400000, {0xd0, 0x0c})

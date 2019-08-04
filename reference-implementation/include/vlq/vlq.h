@@ -40,6 +40,9 @@
 // Encode returns the number of bytes encoded, or 0 if there wasn't enough room.
 // Decode returns the number of bytes decoded, or 0 if the end was not found.
 //
+// Note: The decode value field is IN/OUT, meaning that it will "continue" decoding
+// based on what's currently in value (shifting and adding bits to it).
+//
 #define DEFINE_VLQ_ENCODE_DECODE_FUNCTIONS(SIZE, TYPE) \
 static int lvlq_encoded_size_ ## SIZE(TYPE value) \
 { \
@@ -117,7 +120,7 @@ static int lvlq_decode_ ## SIZE(TYPE* value, const uint8_t* buffer, int buffer_l
     const int group_shift = sizeof(*value) * 8 - 7; \
     const uint8_t* end = buffer + buffer_length; \
     const uint8_t* ptr = buffer; \
-    TYPE accumulator = 0; \
+    TYPE accumulator = *value; \
     bool terminated = false; \
  \
     while(ptr < end) \
@@ -213,7 +216,7 @@ static int rvlq_decode_ ## SIZE(TYPE* value, const uint8_t* buffer, int buffer_l
 { \
     const uint8_t* end = buffer + buffer_length; \
     const uint8_t* ptr = buffer; \
-    TYPE accumulator = 0; \
+    TYPE accumulator = *value; \
     bool terminated = false; \
  \
     while(ptr < end) \
