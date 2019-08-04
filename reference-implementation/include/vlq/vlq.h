@@ -37,11 +37,33 @@
 // omitted from the msb side, and groups are added in big endian order:
 // ... [0000000] [0000000] [0000000] [abcdefg] [abcdefg]
 //
-// Encode returns the number of bytes encoded, or 0 if there wasn't enough room.
-// Decode returns the number of bytes decoded, or 0 if the end was not found.
+// Function signatures (they are the same for rvlq and lvlq for all sizes):
 //
-// Note: The decode value field is IN/OUT, meaning that it will "continue" decoding
-// based on what's currently in value (shifting and adding bits to it).
+//
+// # Return the number of bytes required to encode this value.
+// #
+// int rvlq_encoded_size_xyz(uint_xyz value);
+//
+//
+// # Encode value to buffer.
+// #
+// # Returns the number of bytes encoded, or 0 if there wasn't enough room.
+// #
+// int rvlq_encode_xyz(uint_xyz value, uint8_t* buffer, int buffer_length);
+//
+//
+// # Decode to value from buffer.
+// #
+// # If value is not set to 0 before calling this function, it will assume
+// # that you are continuing a decode of a VLQ that spans a buffer edge.
+// #
+// # Returns the number of bytes decoded, either as a positive or multiplied
+// # by -1. A negative (or 0) return indicates that the end of the buffer was
+// # reached but no termination bit has been found yet. In such a case, you may
+// # call this function again with the same value on the next buffer to
+// # continue decoding.
+// #
+// int rvlq_decode_xyz(uint_xyz* value, uint8_t* buffer, int buffer_length);
 //
 #define DEFINE_VLQ_ENCODE_DECODE_FUNCTIONS(SIZE, TYPE) \
 static int lvlq_encoded_size_ ## SIZE(TYPE value) \
@@ -133,12 +155,12 @@ static int lvlq_decode_ ## SIZE(TYPE* value, const uint8_t* buffer, int buffer_l
             break; \
         } \
     } \
-    if(!terminated) \
-    { \
-        return 0; \
-    } \
     *value = accumulator; \
-    return ptr - buffer; \
+    if(terminated) \
+    { \
+        return ptr - buffer; \
+    } \
+    return -(ptr - buffer); \
 } \
 static int rvlq_encoded_size_ ## SIZE(TYPE value) \
 { \
@@ -229,12 +251,12 @@ static int rvlq_decode_ ## SIZE(TYPE* value, const uint8_t* buffer, int buffer_l
             break; \
         } \
     } \
-    if(!terminated) \
-    { \
-        return 0; \
-    } \
     *value = accumulator; \
-    return ptr - buffer; \
+    if(terminated) \
+    { \
+        return ptr - buffer; \
+    } \
+    return -(ptr - buffer); \
 }
 
 
