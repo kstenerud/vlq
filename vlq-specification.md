@@ -181,23 +181,38 @@ The most popular variable length unsigned integer encoding today is the VLQ vari
 
 Example:
 
-Received over 2 buffer reads: `[b4 d2]`, `[5a 91 ff]`
+Received over 2 buffer reads: `[84 d2]`, `[ff 91 51 ...]`
 
-Since the encoded integer spans two received buffers, you cannot decode it in one shot. If the groups were written in big endian order, you could simply continue the decoding algorithm from one buffer to the next:
+Since the encoded integer spans two received buffers, you cannot decode it in one shot. If the groups are written in big endian order, you can continue the simple algorithm of shifting and adding over to the next buffer:
 
     accumulator = (accumulator << 7) | (next_byte&0x7f)
 
-Byte read order:
-* After buffer 0, byte 0 (0xb4): accumulator = 0x00000034
-* After buffer 0, byte 1 (0xd2): accumulator = 0x00001a52
-* After buffer 1, byte 0 (0x5a): accumulator = 0x000d295a
+Operations:
+* Read buffer 0, byte 0 (0x84, data = 0x04): `accumulator` = 0x00000004
+* Read buffer 0, byte 1 (0xd2, data = 0x52): `accumulator` = 0x00000252
+* End of buffer 0. Return `accumulator` and end status (not complete).
+* Read buffer 1, byte 0 (0xff, data = 0x7f): `accumulator` = 0x0001297f
+* Read buffer 1, byte 1 (0x91, data = 0x11): `accumulator` = 0x0094bf91
+* Read buffer 1, byte 2 (0x51, data = 0x51): `accumulator` = 0x4a5fc8d1
+* End of VLQ. Return `accumulator` and end status (complete).
 
-With varint, the groups are written in little endian order, so you can't do this. Instead, you would have to store extra state information across calls:
+With varint, the groups are written in little endian order, so you would have to keep track of extra state information across calls to make sure subsequent groups are added to the proper bit position. Also, `next_byte` now has to be extended to the width of the accumulator, even if the CPU has smaller/faster opcodes for mixed sized operand combinations:
 
-    accumulator = accumulator | ((next_byte&0x7f) << shift_amount)
+Received over 2 buffer reads: `[d1 91]`, `[ff d2 04 ...]`
+
+    accumulator = accumulator | ((uintXXX_t)(next_byte&0x7f) << shift_amount)
     shift_amount += 7
 
-This also has the potential to trigger undefined behavior in C/C++ programs by reading malformed input data or decoding into data types too small to hold the value (because it could try to shift by amounts greater than the data size). Mitigating this would require extra sanity checks or a more complex algorithm.
+Operations
+* Read buffer 0, byte 0 (0xd1, data = 0x51): `accumulator` = 0x00000051, `shift_amount` = 7
+* Read buffer 0, byte 1 (0x91, data = 0x11): `accumulator` = 0x000008d1, `shift_amount` = 14
+* End of buffer 0. Return `accumulator`, `shift_amount`, and end status (not complete).
+* Read buffer 1, byte 0 (0xff, data = 0x7f): `accumulator` = 0x001fc8d1, `shift_amount` = 21
+* Read buffer 1, byte 1 (0xd2, data = 0x52): `accumulator` = 0x0a5fc8d1, `shift_amount` = 28
+* Read buffer 1, byte 1 (0x04, data = 0x04): `accumulator` = 0x4a5fc8d1, `shift_amount` = 35
+* End of VLQ. Return `accumulator`, `shift_amount`, and end status (complete).
+
+There are also potential security implications: With big endian ordered groups, if the decoder encountered an encoded value that was bigger than its accumulator, the excess bits would simply be shifted off the end. If you didn't guard gainst this, you'd have an incorrect value, but otherwise no harm done. With little endian ordered groups, you're incrementing `shift_amount`, which would eventually trigger undefined behavior in languages such as C and C++ once it exceeds the bit width of the accumulator.
 
 
 
