@@ -1,5 +1,5 @@
-Variable Length Quantity Encoding
-=================================
+Variable Length Quantity
+========================
 
 Variable Length Quantity (VLQ) encoding is an unsigned integer compression scheme originally designed for the MIDI file format. This specification expands upon it slightly by allowing encoding from the "left" or "right" side of the quantity (the original MIDI version is "right" oriented).
 
@@ -8,12 +8,12 @@ Variable Length Quantity (VLQ) encoding is an unsigned integer compression schem
 Encoding
 --------
 
-A value is encoded into groups of 7 bits, then encoded into bytes containing the 7 bits of data + a high "continuation" bit. A continuation bit of `1` indicates that the encoding continues on to the next byte. Any trailing groups containing all zero bits are not encoded since they're not needed to reconstruct the original value.
+A value is encoded into groups of 7 bits, then encoded into bytes containing the 7 bits of data + a high "continuation" bit. A continuation bit of `1` indicates that the encoding continues on to the next byte. Empty groups (containing all 0) can be omitted under certain circumstances, thus achieving data compression.
 
 
 ### Orientation
 
-Grouping can be done either from the "left" side (**LVLQ**) or from the "right" side (**RVLQ**), depending on which side of the values in your data the bits tend to cluster at. The endianness is determined by the encoding direction, chosen to allow decoding of the value without requiring any additional state, even when the encoded value is split across multiple buffer reads.
+Grouping can be done either from the "left" side (**LVLQ**) or from the "right" side (**RVLQ**), depending on which side of the values in your data the bits tend to cluster at. The endianness used when storing the groups is determined by the encoding direction, and was chosen to allow decoding of the value without requiring any additional state, even when the encoded value is decoded across multiple buffer reads.
 
 
 ### Illustration: Right-heavy 32-bit value encoded as RVLQ
@@ -179,26 +179,19 @@ Why not Varint?
 
 The most popular variable length unsigned integer encoding today is the VLQ variant `varint` in [Google's Protocol Buffers](https://developers.google.com/protocol-buffers/docs/encoding). Varint stores the groups right-oriented and in little endian order, which increases the codec complexity unnecessarily.
 
-Example:
+Storing in host endianness only improves performance when all data bits are contiguous. Once you break up the bit stream with metadata bits (as is the case here), the performance advantage disappears because each byte must be processed individually anyway. Once this advantage is gone, the only remaining performance measure is algorithmic complexity.
+
+
+### Example
 
 Received over 2 buffer reads: `[84 d2]`, `[ff 91 51 ...]`
 
-Since the encoded integer spans two received buffers, you cannot decode it in one shot. If the groups are written in big endian order, you can continue the simple algorithm of shifting and adding over to the next buffer:
+Since the encoded integer spans two received buffers, you cannot decode it in one shot.
 
-    accumulator = (accumulator << 7) | (next_byte&0x7f)
 
-Operations:
-* Read buffer 0, byte 0 (0x84, data = 0x04): `accumulator` = 0x00000004
-* Read buffer 0, byte 1 (0xd2, data = 0x52): `accumulator` = 0x00000252
-* End of buffer 0. Return `accumulator` and end status (not complete).
-* Read buffer 1, byte 0 (0xff, data = 0x7f): `accumulator` = 0x0001297f
-* Read buffer 1, byte 1 (0x91, data = 0x11): `accumulator` = 0x0094bf91
-* Read buffer 1, byte 2 (0x51, data = 0x51): `accumulator` = 0x4a5fc8d1
-* End of VLQ. Return `accumulator` and end status (complete).
+#### As a Varint
 
-With varint, the groups are written in little endian order, so you would have to keep track of extra state information across calls to make sure subsequent groups are added to the proper bit position. Also, `next_byte` now has to be extended to the width of the accumulator, even if the CPU has smaller/faster opcodes for mixed sized operand combinations:
-
-Received over 2 buffer reads: `[d1 91]`, `[ff d2 04 ...]`
+With varint, the groups are written in little endian order, so one must keep track of extra state information across calls to make sure subsequent groups are added to the proper bit position. Also, `next_byte` now has to be extended to the width of the accumulator, even if the CPU has smaller/faster opcodes for mixed sized operand combinations:
 
     accumulator = accumulator | ((uintXXX_t)(next_byte&0x7f) << shift_amount)
     shift_amount += 7
@@ -212,7 +205,23 @@ Operations
 * Read buffer 1, byte 1 (0x04, data = 0x04): `accumulator` = 0x4a5fc8d1, `shift_amount` = 35
 * End of VLQ. Return `accumulator`, `shift_amount`, and end status (complete).
 
-There are also potential security implications: With big endian ordered groups, if the decoder encountered an encoded value that was bigger than its accumulator, the excess bits would simply be shifted off the end. If you didn't guard gainst this, you'd have an incorrect value, but otherwise no harm done. With little endian ordered groups, you're incrementing `shift_amount`, which would eventually trigger undefined behavior in languages such as C and C++ once it exceeds the bit width of the accumulator.
+You must also take care not to trigger undefined behavior in some languages if `shift_amount` grows too big for the accumulator.
+
+
+#### As an RVLQ
+
+Since the groups are written in big endian order, one can use a simple algorithm of shifting and adding, even when changing buffers. No other state is required:
+
+    accumulator = (accumulator << 7) | (next_byte&0x7f)
+
+Operations:
+* Read buffer 0, byte 0 (0x84, data = 0x04): `accumulator` = 0x00000004
+* Read buffer 0, byte 1 (0xd2, data = 0x52): `accumulator` = 0x00000252
+* End of buffer 0. Return `accumulator` and end status (not complete).
+* Read buffer 1, byte 0 (0xff, data = 0x7f): `accumulator` = 0x0001297f
+* Read buffer 1, byte 1 (0x91, data = 0x11): `accumulator` = 0x0094bf91
+* Read buffer 1, byte 2 (0x51, data = 0x51): `accumulator` = 0x4a5fc8d1
+* End of VLQ. Return `accumulator` and end status (complete).
 
 
 
