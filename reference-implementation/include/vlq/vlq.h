@@ -19,7 +19,6 @@
 // DEALINGS IN THE SOFTWARE.
 
 #ifndef KS_VLQ_H
-#define KS_VLQ_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -37,33 +36,8 @@
 // omitted from the msb side, and groups are added in big endian order:
 // ... [0000000] [0000000] [0000000] [abcdefg] [abcdefg]
 //
-// Function signatures (they are the same for rvlq and lvlq for all sizes):
-//
-//
-// # Return the number of bytes required to encode this value.
-// #
-// int rvlq_encoded_size_xyz(uint_xyz value);
-//
-//
-// # Encode value to buffer.
-// #
-// # Returns the number of bytes encoded, or 0 if there wasn't enough room.
-// #
-// int rvlq_encode_xyz(uint_xyz value, uint8_t* buffer, int buffer_length);
-//
-//
-// # Decode to value from buffer.
-// #
-// # If value is not set to 0 before calling this function, it will assume
-// # that you are continuing a decode of a VLQ that spans a buffer edge.
-// #
-// # Returns the number of bytes decoded, either as a positive or multiplied
-// # by -1. A negative (or 0) return indicates that the end of the buffer was
-// # reached but no termination bit has been found yet. In such a case, you may
-// # call this function again with the same value on the next buffer to
-// # continue decoding.
-// #
-// int rvlq_decode_xyz(uint_xyz* value, uint8_t* buffer, int buffer_length);
+// Encode returns the number of bytes encoded, or 0 if there wasn't enough room.
+// Decode returns the number of bytes decoded, or 0 if the end was not found.
 //
 #define DEFINE_VLQ_ENCODE_DECODE_FUNCTIONS(SIZE, TYPE) \
 static int lvlq_encoded_size_ ## SIZE(TYPE value) \
@@ -142,7 +116,7 @@ static int lvlq_decode_ ## SIZE(TYPE* value, const uint8_t* buffer, int buffer_l
     const int group_shift = sizeof(*value) * 8 - 7; \
     const uint8_t* end = buffer + buffer_length; \
     const uint8_t* ptr = buffer; \
-    TYPE accumulator = *value; \
+    TYPE accumulator = 0; \
     bool terminated = false; \
  \
     while(ptr < end) \
@@ -155,12 +129,12 @@ static int lvlq_decode_ ## SIZE(TYPE* value, const uint8_t* buffer, int buffer_l
             break; \
         } \
     } \
-    *value = accumulator; \
-    if(terminated) \
+    if(!terminated) \
     { \
-        return ptr - buffer; \
+        return 0; \
     } \
-    return -(ptr - buffer); \
+    *value = accumulator; \
+    return ptr - buffer; \
 } \
 static int rvlq_encoded_size_ ## SIZE(TYPE value) \
 { \
@@ -238,7 +212,7 @@ static int rvlq_decode_ ## SIZE(TYPE* value, const uint8_t* buffer, int buffer_l
 { \
     const uint8_t* end = buffer + buffer_length; \
     const uint8_t* ptr = buffer; \
-    TYPE accumulator = *value; \
+    TYPE accumulator = 0; \
     bool terminated = false; \
  \
     while(ptr < end) \
@@ -251,17 +225,30 @@ static int rvlq_decode_ ## SIZE(TYPE* value, const uint8_t* buffer, int buffer_l
             break; \
         } \
     } \
-    *value = accumulator; \
-    if(terminated) \
+    if(!terminated) \
     { \
-        return ptr - buffer; \
+        return 0; \
     } \
-    return -(ptr - buffer); \
+    *value = accumulator; \
+    return ptr - buffer; \
 }
 
 
 _Pragma("GCC diagnostic push")
 _Pragma("GCC diagnostic ignored \"-Wunused-function\"")
+
+static inline void vlq_extend(uint8_t* dst, int group_count)
+{
+    for(int i = 0; i < group_count; i++)
+    {
+        dst[i] = 0x80;
+    }
+}
+
+static inline bool vlq_is_extended(const uint8_t* buffer)
+{
+    return *buffer == 0x80;
+}
 
 DEFINE_VLQ_ENCODE_DECODE_FUNCTIONS(32, uint32_t)
 DEFINE_VLQ_ENCODE_DECODE_FUNCTIONS(64, uint64_t)
