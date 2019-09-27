@@ -17,7 +17,7 @@ Specification
 Implementations
 ---------------
 
-* [C implementation](reference-implementation)
+* [C implementation](https://github.com/kstenerud/c-vlq)
 * [Go implementation](https://github.com/kstenerud/go-vlq)
 
 
